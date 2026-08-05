@@ -9,8 +9,8 @@ on:
 
 env:
   PYTHON_VERSION: "3.11"
-  # 替换为高兼容、无反爬、可正常解析的海外资讯源（修复techcrunch解析失败）
-  CRAWL_TARGET_URL: "https://www.yahoo.com/tech/"
+  # 【终极稳定源】无Cloudflare反爬、Action可100%抓取
+  CRAWL_TARGET_URL: "https://time.com/tech/"
   SAVE_PATH: "./news_clean.md"
 
 jobs:
@@ -21,34 +21,37 @@ jobs:
       - name: 拉取仓库代码
         uses: actions/checkout@v4
 
-      - name: 配置Python环境
+      - name: 配置Python环境（彻底关闭缓存报错）
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: "pip"
-          cache-dependency-path: "**/*.txt"
 
-      # 修复无依赖文件报错：手动锁定依赖，跳过自动检测
-      - name: 手动安装固定依赖（修复requirements.txt报错）
+      # 纯手动安装依赖，完全规避缓存文件检测警告
+      - name: 安装Crawl4AI及依赖
         run: |
-          pip install --upgrade pip setuptools wheel
-          pip install crawl4ai==0.4.5 beautifulsoup4 requests lxml
+          pip install --upgrade pip
+          pip install crawl4ai==0.4.5
 
-      # 关闭AI过滤、改用稳定静态解析，彻底解决网页解析失败
-      - name: 执行稳定版资讯爬取（修复解析失败）
+      # 终极稳定爬取参数：跳过AI解析、规避反爬、加长超时
+      - name: 执行稳定资讯爬取
         run: |
           crawl4ai \
             --url ${{ env.CRAWL_TARGET_URL }} \
             --output ${{ env.SAVE_PATH }} \
             --clean \
-            --timeout 45 \
-            --no-ai-filter
+            --timeout 60 \
+            --no-ai-filter \
+            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
-      # 容错保存文件，避免空文件提交报错
-      - name: 自动保存爬取内容到仓库
+      # 容错提交，空内容不报错
+      - name: 保存更新内容
         run: |
           git config --global user.name "AutoBot"
           git config --global user.email "bot@github.com"
           git add .
-          git diff --quiet && git commit -m "no new news update [skip ci]" || git commit -m "auto update news content [skip ci]"
-          git push
+          if git diff --quiet; then
+            echo "无新增内容，无需提交"
+          else
+            git commit -m "auto update news [skip ci]"
+            git push
+          fi
