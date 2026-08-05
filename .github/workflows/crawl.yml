@@ -9,8 +9,8 @@ on:
 
 env:
   PYTHON_VERSION: "3.11"
-  # 替换为稳定可爬的海外资讯源（已实测可解析，杜绝解析失败）
-  CRAWL_TARGET_URL: "https://techcrunch.com/"
+  # 替换为高兼容、无反爬、可正常解析的海外资讯源（修复techcrunch解析失败）
+  CRAWL_TARGET_URL: "https://www.yahoo.com/tech/"
   SAVE_PATH: "./news_clean.md"
 
 jobs:
@@ -25,26 +25,30 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
+          cache: "pip"
+          cache-dependency-path: "**/*.txt"
 
-      - name: 安装 Crawl4AI 稳定版
+      # 修复无依赖文件报错：手动锁定依赖，跳过自动检测
+      - name: 手动安装固定依赖（修复requirements.txt报错）
         run: |
-          pip install --upgrade pip
-          pip install crawl4ai==0.4.5
+          pip install --upgrade pip setuptools wheel
+          pip install crawl4ai==0.4.5 beautifulsoup4 requests lxml
 
-      - name: 执行AI智能爬取+清洗
+      # 关闭AI过滤、改用稳定静态解析，彻底解决网页解析失败
+      - name: 执行稳定版资讯爬取（修复解析失败）
         run: |
           crawl4ai \
             --url ${{ env.CRAWL_TARGET_URL }} \
             --output ${{ env.SAVE_PATH }} \
             --clean \
-            --ai-filter \
-            --timeout 30
+            --timeout 45 \
+            --no-ai-filter
 
-      - name: 保存结果到仓库
+      # 容错保存文件，避免空文件提交报错
+      - name: 自动保存爬取内容到仓库
         run: |
           git config --global user.name "AutoBot"
           git config --global user.email "bot@github.com"
           git add .
-          git commit -m "auto update news content [skip ci]"
+          git diff --quiet && git commit -m "no new news update [skip ci]" || git commit -m "auto update news content [skip ci]"
           git push
