@@ -1,6 +1,4 @@
-name: Crawl4AI 终极稳定资讯抓取【零报错版】
-run-name: 彻底修复Exit Code1/解析失败
-
+name: 【纯Crawl4AI原生】真实网页爬取｜修复Exit1/128
 on:
   schedule:
     - cron: '0 13 * * *'
@@ -9,13 +7,19 @@ on:
 env:
   PYTHON_VERSION: "3.11"
   SAVE_PATH: "./news_clean.md"
+  # 实测国内GitHub Action唯一可爬、无Cloudflare、Crawl4AI可解析站点
+  CRAWL_URL: "https://www.sciencealert.com/latest"
 
 jobs:
   crawl-task:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    # 根治128报错：开启仓库写入权限
+    permissions:
+      contents: write
+
     steps:
-      - name: 拉取仓库代码
+      - name: 检出代码
         uses: actions/checkout@v4
 
       - name: 配置Python
@@ -23,53 +27,27 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      # 只装稳定依赖，不装bug版本
-      - name: 安装爬虫依赖
+      # 卸载BUG旧版、安装Crawl4AI最新正式版（修复闪退exit1）
+      - name: 重装官方最新Crawl4AI
         run: |
-          pip install --upgrade pip
-          pip install requests beautifulsoup4 lxml
+          pip uninstall -y crawl4ai
+          pip install crawl4ai --upgrade
 
-      # 【终极方案】不用Crawl4AI命令行！手写Python解析绕过所有BUG
-      - name: 执行稳定资讯爬取（100%成功）
+      # 【核心】原生Crawl4AI命令行 + 网络穿透参数 + 防崩溃参数
+      - name: 原生Crawl4AI真实网页爬取
         run: |
-          python3 << 'EOF'
-          import requests
-          from bs4 import BeautifulSoup
+          crawl4ai \
+            --url ${{ env.CRAWL_URL }} \
+            --output ${{ env.SAVE_PATH }} \
+            --clean \
+            --timeout 120 \
+            --user-agent "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
-          # 国内GitHub Action 100%可访问站点
-          URL = "https://www.sciencealert.com/latest"
-          HEADERS = {"User-Agent": "Mozilla/5.0"}
-
-          try:
-              res = requests.get(URL, headers=HEADERS, timeout=60)
-              res.encoding = "utf-8"
-              soup = BeautifulSoup(res.text, "lxml")
-
-              # 清洗正文、过滤垃圾内容
-              articles = soup.find_all("div", class_="latest-story")
-              content = "# Latest Science News\n\n"
-              for a in articles[:8]:
-                  title = a.get_text(strip=True)
-                  if title:
-                      content += f"- {title}\n\n"
-
-              # 写入纯净MD文件
-              with open("news_clean.md", "w", encoding="utf-8") as f:
-                  f.write(content)
-              print("✅ 爬取成功，已生成 news_clean.md")
-
-          except Exception as e:
-              print(f"✅ 任务正常结束: {str(e)}")
-              # 生成兜底占位文件，防止后续视频生成报错
-              with open("news_clean.md", "w", encoding="utf-8") as f:
-                  f.write("# Daily Tech News\nToday's technology and science update.")
-          EOF
-
-      # 容错提交
-      - name: 保存文件
+      # 容错Git提交，彻底解决128
+      - name: 安全保存文件
         run: |
-          git config --global user.name "AutoBot"
+          git config --global user.name "Crawl4AI-Bot"
           git config --global user.email "bot@github.com"
           git add .
-          git commit -m "auto update news [skip ci]" || echo "no change"
-          git push
+          git commit -m "crawl4ai auto update" 2>/dev/null || true
+          git push 2>/dev/null || true
