@@ -1,0 +1,50 @@
+name: Crawl4AI 全自动资讯抓取
+run-name: AI清洗资讯爬虫运行中
+
+# 定时：每天北京时间21点自动爬取 + 支持手动一键运行
+on:
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.11"
+  # 替换为稳定可爬的海外资讯源（已实测可解析，杜绝解析失败）
+  CRAWL_TARGET_URL: "https://techcrunch.com/"
+  SAVE_PATH: "./news_clean.md"
+
+jobs:
+  crawl-task:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 拉取仓库代码
+        uses: actions/checkout@v4
+
+      - name: 配置Python环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: 安装 Crawl4AI 稳定版
+        run: |
+          pip install --upgrade pip
+          pip install crawl4ai==0.4.5
+
+      - name: 执行AI智能爬取+清洗
+        run: |
+          crawl4ai \
+            --url ${{ env.CRAWL_TARGET_URL }} \
+            --output ${{ env.SAVE_PATH }} \
+            --clean \
+            --ai-filter \
+            --timeout 30
+
+      - name: 保存结果到仓库
+        run: |
+          git config --global user.name "AutoBot"
+          git config --global user.email "bot@github.com"
+          git add .
+          git commit -m "auto update news content [skip ci]"
+          git push
